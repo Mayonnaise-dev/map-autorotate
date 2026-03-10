@@ -1,0 +1,547 @@
+{
+    "surf_ace": {
+        "ws": true,
+        "display": "Ace - Hybrid T2",
+        "mapid": "3088413071"
+    },
+    "surf_amaranthine": {
+        "ws": true,
+        "display": "Amaranthine - Linear T2",
+        "mapid": "3473098322"
+    },
+    "surf_andromeda": {
+        "ws": true,
+        "display": "Andromeda - Linear T1",
+        "mapid": "3494613662"
+    },
+    "surf_aqua_fix": {
+        "ws": true,
+        "display": "Aqua_fix - Linear T2",
+        "mapid": "3259258220"
+    },
+    "surf_aquaflow": {
+        "ws": true,
+        "display": "Aquaflow - Linear T2",
+        "mapid": "3255589335"
+    },
+    "surf_arctic": {
+        "ws": true,
+        "display": "Arctic - Linear T1",
+        "mapid": "3414958060"
+    },
+    "surf_aser": {
+        "ws": true,
+        "display": "Aser - Hybrid T1",
+        "mapid": "3298148307"
+    },
+    "surf_asian": {
+        "ws": true,
+        "display": "Asian - Staged T1",
+        "mapid": "3468802676"
+    },
+    "surf_assail": {
+        "ws": true,
+        "display": "Assail - Linear T5",
+        "mapid": "3309986322"
+    },
+    "surf_astra": {
+        "ws": true,
+        "display": "Astra - Linear T2",
+        "mapid": "3165517928"
+    },
+    "surf_atrium": {
+        "ws": true,
+        "display": "Atrium - Linear T1",
+        "mapid": "3130141240"
+    },
+    "surf_aura": {
+        "ws": true,
+        "display": "Aura - Staged T1",
+        "mapid": "3454246494"
+    },
+    "surf_beginner": {
+        "ws": true,
+        "display": "Beginner - Staged T1",
+        "mapid": "3070321829"
+    },
+    "surf_beginner2": {
+        "ws": true,
+        "display": "Beginner2 - Staged T2",
+        "mapid": "3441233508"
+    },
+    "surf_benevolent": {
+        "ws": true,
+        "display": "Benevolent - Staged T1",
+        "mapid": "3098972556"
+    },
+    "surf_bonkers_v2": {
+        "ws": true,
+        "display": "Bonkers_v2 - Staged T2",
+        "mapid": "3404372406"
+    },
+    "surf_borderlands": {
+        "ws": true,
+        "display": "Borderlands - Staged T1",
+        "mapid": "3185678089"
+    },
+    "surf_boreas": {
+        "ws": true,
+        "display": "Boreas - Linear T1",
+        "mapid": "3133346713"
+    },
+    "surf_calycate_cs2": {
+        "ws": true,
+        "display": "Calycate_cs2 - Linear T1",
+        "mapid": "3408785159"
+    },
+    "surf_calycate2_cs2": {
+        "ws": true,
+        "display": "Calycate2_cs2 - Linear T1",
+        "mapid": "3428980683"
+    },
+    "surf_cancer": {
+        "ws": true,
+        "display": "Cancer - Staged T1",
+        "mapid": "3473601307"
+    },
+    "surf_cannonball": {
+        "ws": true,
+        "display": "Cannonball - Linear T4",
+        "mapid": "3152119098"
+    },
+    "surf_capsule": {
+        "ws": true,
+        "display": "Capsule - Staged T1",
+        "mapid": "3408944324"
+    },
+    "surf_cartoon": {
+        "ws": true,
+        "display": "Cartoon - Staged T3",
+        "mapid": "3483064588"
+    },
+    "surf_colors_final": {
+        "ws": true,
+        "display": "Colors_final - Staged T2",
+        "mapid": "3427978113"
+    },
+    "surf_colum_2": {
+        "ws": true,
+        "display": "Colum_2 - Staged T1",
+        "mapid": "3387370283"
+    },
+    "surf_craneworks": {
+        "ws": true,
+        "display": "Craneworks - Staged T1",
+        "mapid": "3427773766"
+    },
+    "surf_cyberwave": {
+        "ws": true,
+        "display": "Cyberwave - Staged T2",
+        "mapid": "3167714768"
+    },
+    "surf_cyka_ksf": {
+        "ws": true,
+        "display": "Cyka_ksf - Staged T3",
+        "mapid": "3263197243"
+    },
+    "surf_deathstar": {
+        "ws": true,
+        "display": "Deathstar - Hybrid T1",
+        "mapid": "3080544577"
+    },
+    "surf_decked": {
+        "ws": true,
+        "display": "Decked - Staged T2",
+        "mapid": "3461807949"
+    },
+    "surf_delight": {
+        "ws": true,
+        "display": "Delight - Linear T2",
+        "mapid": "3143578794"
+    },
+    "surf_devil": {
+        "ws": true,
+        "display": "Devil - Staged T7",
+        "mapid": "1488573411"
+    },
+    "surf_easy1": {
+        "ws": true,
+        "display": "Easy1 - Staged T1",
+        "mapid": "3339888625"
+    },
+    "surf_easy2": {
+        "ws": true,
+        "display": "Easy2 - Staged T1",
+        "mapid": "3285630294"
+    },
+    "surf_egypt": {
+        "ws": true,
+        "display": "Egypt - Linear T1",
+        "mapid": "3467821794"
+    },
+    "surf_elysium": {
+        "ws": true,
+        "display": "Elysium - Staged T5",
+        "mapid": "3147764666"
+    },
+    "surf_escape_final": {
+        "ws": true,
+        "display": "Escape_final - Staged T1",
+        "mapid": "3422093425"
+    },
+    "surf_ethereal": {
+        "ws": true,
+        "display": "Ethereal - Staged T2",
+        "mapid": "3554168716"
+    },
+    "surf_evo": {
+        "ws": true,
+        "display": "Evo - Staged T1",
+        "mapid": "3075725935"
+    },
+    "surf_ezclap": {
+        "ws": true,
+        "display": "Ezclap - Staged T3",
+        "mapid": "3155959260"
+    },
+    "surf_first": {
+        "ws": true,
+        "display": "First - Staged T1",
+        "mapid": "3412119987"
+    },
+    "surf_flow": {
+        "ws": true,
+        "display": "Flow - Linear T1",
+        "mapid": "3403083638"
+    },
+    "surf_frey_remake": {
+        "ws": true,
+        "display": "Frey_remake - Staged T2",
+        "mapid": "3504461996"
+    },
+    "surf_frost": {
+        "ws": true,
+        "display": "Frost - Linear T1",
+        "mapid": "3490208694"
+    },
+    "surf_frosty": {
+        "ws": true,
+        "display": "Frosty - Linear T2",
+        "mapid": "3581092479"
+    },
+    "surf_fruits": {
+        "ws": true,
+        "display": "Fruits - Staged T3",
+        "mapid": "3278391448"
+    },
+    "surf_garden": {
+        "ws": true,
+        "display": "Garden - Staged T1",
+        "mapid": "3327691360"
+    },
+    "surf_glass9": {
+        "ws": true,
+        "display": "Glass9 - Linear T2",
+        "mapid": "3118424699"
+    },
+    "surf_gleam": {
+        "ws": true,
+        "display": "Gleam - Linear T2",
+        "mapid": "3124208103"
+    },
+    "surf_gravity_ride": {
+        "ws": true,
+        "display": "Gravity_ride - Staged T1",
+        "mapid": "3468627557"
+    },
+    "surf_het": {
+        "ws": true,
+        "display": "Het - Linear T1",
+        "mapid": "3433161431"
+    },
+    "surf_hologram2": {
+        "ws": true,
+        "display": "Hologram2 - Linear T1",
+        "mapid": "3372740811"
+    },
+    "surf_hourglass": {
+        "ws": true,
+        "display": "Hourglass - Linear T1",
+        "mapid": "3550103587"
+    },
+    "surf_how2surf": {
+        "ws": true,
+        "display": "How2surf - Staged T2",
+        "mapid": "3292018151"
+    },
+    "surf_impact_tnn": {
+        "ws": true,
+        "display": "Impact_tnn - Staged T1",
+        "mapid": "3402245738"
+    },
+    "surf_ing": {
+        "ws": true,
+        "display": "Ing - Linear T2",
+        "mapid": "3124210799"
+    },
+    "surf_ivory": {
+        "ws": true,
+        "display": "Ivory - Linear T2",
+        "mapid": "3426541855"
+    },
+    "surf_jaqen": {
+        "ws": true,
+        "display": "Jaqen - Linear T4",
+        "mapid": "3436734221"
+    },
+    "surf_kitsune": {
+        "ws": true,
+        "display": "Kitsune - Staged T1",
+        "mapid": "3076153623"
+    },
+    "surf_klue": {
+        "ws": true,
+        "display": "Klue - Linear T2",
+        "mapid": "3205472654"
+    },
+    "surf_lovetunnel": {
+        "ws": true,
+        "display": "Lovetunnel - Linear T1",
+        "mapid": "3461236557"
+    },
+    "surf_lullaby": {
+        "ws": true,
+        "display": "Lullaby - Linear T1",
+        "mapid": "3271149992"
+    },
+    "surf_lux": {
+        "ws": true,
+        "display": "Lux - Linear T1",
+        "mapid": "3280013431"
+    },
+    "surf_mads": {
+        "ws": true,
+        "display": "Mads - Staged T2",
+        "mapid": "3072767313"
+    },
+    "surf_me": {
+        "ws": true,
+        "display": "Me - Staged T1",
+        "mapid": "3248211716"
+    },
+    "surf_mesa_aether": {
+        "ws": true,
+        "display": "Mesa_aether - Linear T3",
+        "mapid": "3125360522"
+    },
+    "surf_mesa_revo": {
+        "ws": true,
+        "display": "Mesa_revo - Linear T1",
+        "mapid": "3076980482"
+    },
+    "surf_mincraft": {
+        "ws": true,
+        "display": "Mincraft - Linear T5",
+        "mapid": "3335229955"
+    },
+    "surf_mom": {
+        "ws": true,
+        "display": "Mom - Staged T1",
+        "mapid": "3282137145"
+    },
+    "surf_momentum": {
+        "ws": true,
+        "display": "Momentum - Staged T3",
+        "mapid": "3117160100"
+    },
+    "surf_moonkingdom": {
+        "ws": true,
+        "display": "Moonkingdom - Linear T1",
+        "mapid": "3437626079"
+    },
+    "surf_neoteric": {
+        "ws": true,
+        "display": "Neoteric - Staged T4",
+        "mapid": "3606067624"
+    },
+    "surf_not_so_hentai": {
+        "ws": true,
+        "display": "Not_so_hentai - Staged T2",
+        "mapid": "3136164027"
+    },
+    "surf_nyx": {
+        "ws": true,
+        "display": "Nyx - Linear T1",
+        "mapid": "3129698096"
+    },
+    "surf_palm": {
+        "ws": true,
+        "display": "Palm - Linear T2",
+        "mapid": "3226467978"
+    },
+    "surf_pantheon": {
+        "ws": true,
+        "display": "Pantheon - Linear T1",
+        "mapid": "3233650339"
+    },
+    "surf_paradigm": {
+        "ws": true,
+        "display": "Paradigm - Staged T2",
+        "mapid": "3255525511"
+    },
+    "surf_paradise": {
+        "ws": true,
+        "display": "Paradise - Staged T2",
+        "mapid": "3391598488"
+    },
+    "surf_physics": {
+        "ws": true,
+        "display": "Physics - Linear T2",
+        "mapid": "3443375394"
+    },
+    "surf_piano": {
+        "ws": true,
+        "display": "Piano - Staged T1",
+        "mapid": "3463673293"
+    },
+    "surf_prisma": {
+        "ws": true,
+        "display": "Prisma - Hybrid T1",
+        "mapid": "3319154265"
+    },
+    "surf_race": {
+        "ws": true,
+        "display": "Race - Staged T1",
+        "mapid": "3259650654"
+    },
+    "surf_rapid": {
+        "ws": true,
+        "display": "Rapid - Staged T3",
+        "mapid": "3603170327"
+    },
+    "surf_rebel_resistance_njv": {
+        "ws": true,
+        "display": "Rebel_resistance_njv - Linear T1",
+        "mapid": "3433276419"
+    },
+    "surf_reprise": {
+        "ws": true,
+        "display": "Reprise - Linear T2",
+        "mapid": "3261581976"
+    },
+    "surf_reytx": {
+        "ws": true,
+        "display": "Reytx - Staged T1",
+        "mapid": "3406257187"
+    },
+    "surf_rez": {
+        "ws": true,
+        "display": "Rez - Staged T2",
+        "mapid": "3536081532"
+    },
+    "surf_rgb": {
+        "ws": true,
+        "display": "Rgb - Linear T3",
+        "mapid": "3097760172"
+    },
+    "surf_rooftopsv2": {
+        "ws": true,
+        "display": "Rooftopsv2 - Staged T1",
+        "mapid": "3407859825"
+    },
+    "surf_rookie": {
+        "ws": true,
+        "display": "Rookie - Staged T2",
+        "mapid": "3082548297"
+    },
+    "surf_salvador": {
+        "ws": true,
+        "display": "Salvador - Linear T2",
+        "mapid": "3143581802"
+    },
+    "surf_satellite": {
+        "ws": true,
+        "display": "Satellite - Linear T1",
+        "mapid": "3474244972"
+    },
+    "surf_saturday": {
+        "ws": true,
+        "display": "Saturday - Linear T2",
+        "mapid": "3124217155"
+    },
+    "surf_simpsons_cs2": {
+        "ws": true,
+        "display": "Simpsons_cs2 - Staged T2",
+        "mapid": "3352040168"
+    },
+    "surf_skipalot": {
+        "ws": true,
+        "display": "Skipalot - Linear T2",
+        "mapid": "3143608161"
+    },
+    "surf_slob": {
+        "ws": true,
+        "display": "Slob - Staged T2",
+        "mapid": "3212207205"
+    },
+    "surf_snowfort": {
+        "ws": true,
+        "display": "Snowfort - Linear T1",
+        "mapid": "3399023450"
+    },
+    "surf_southpark": {
+        "ws": true,
+        "display": "Southpark - Staged T1",
+        "mapid": "3398896393"
+    },
+    "surf_sundown_njv": {
+        "ws": true,
+        "display": "Sundown_njv - Linear T2",
+        "mapid": "3404344161"
+    },
+    "surf_tiltberg": {
+        "ws": true,
+        "display": "Tiltberg - Linear T1",
+        "mapid": "3442939685"
+    },
+    "surf_tranquil": {
+        "ws": true,
+        "display": "Tranquil - Linear T2",
+        "mapid": "3131555986"
+    },
+    "surf_utopia_njv": {
+        "ws": true,
+        "display": "Utopia_njv - Linear T1",
+        "mapid": "3073875025"
+    },
+    "surf_void": {
+        "ws": true,
+        "display": "Void - Linear T1",
+        "mapid": "3519869870"
+    },
+    "surf_volvic": {
+        "ws": true,
+        "display": "Volvic - Linear T2",
+        "mapid": "3143583805"
+    },
+    "surf_whiteout": {
+        "ws": true,
+        "display": "Whiteout - Staged T1",
+        "mapid": "3296258256"
+    },
+    "surf_whoknows": {
+        "ws": true,
+        "display": "Whoknows - Linear T3",
+        "mapid": "3605338733"
+    },
+    "surf_whoknows2": {
+        "ws": true,
+        "display": "Whoknows2 - Linear T4",
+        "mapid": "3605899620"
+    },
+    "surf_zeitgeist": {
+        "ws": true,
+        "display": "Zeitgeist - Staged T3",
+        "mapid": "3265329080"
+    }
+}

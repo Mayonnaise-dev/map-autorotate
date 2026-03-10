@@ -1,0 +1,10 @@
+services:
+  autorotate:
+    build: .
+    container_name: autorotate
+    restart: unless-stopped
+    env_file:
+      - .env
+networks:
+  proxy:
+    external: true
