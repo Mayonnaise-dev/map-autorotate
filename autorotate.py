@@ -4,7 +4,10 @@ import os
 import json
 import random
 import logging
+import threading
 from rcon.source import Client
+from fastapi import FastAPI, Request
+import uvicorn
 
 # Configuration via Environment Variables
 RCON_HOST = os.getenv('RCON_HOST', '192.168.1.50')
@@ -16,6 +19,28 @@ MANUAL_CHANGE_THRESHOLD = 90  # if timeleft jumps by more than this, treat as ma
 MAPS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'maps.json')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+LOG_HOST = os.getenv('LOG_HOST', '0.0.0.0')
+LOG_PORT = int(os.getenv('LOG_PORT', '3000'))
+
+chat_regex = re.compile(r'^.*".*<\d+><\[.*\]><(CT|TERRORIST)>" say "(.*)"')
+
+api = FastAPI()
+
+
+@api.post('/log')
+async def receive_log(request: Request):
+    body = (await request.body()).decode('utf-8', errors='replace').strip()
+    match = chat_regex.search(body)
+    if match:
+        team = match.group(1)
+        text = match.group(2)
+        logging.info(f"[CHAT] [{team}] {text}")
+    return {}
+
+
+def start_log_server():
+    uvicorn.run(api, host=LOG_HOST, port=LOG_PORT, log_level='warning')
 
 
 def load_t1_maps(maps_file):
@@ -170,4 +195,7 @@ def main():
 
 
 if __name__ == "__main__":
+    log_thread = threading.Thread(target=start_log_server, daemon=True)
+    log_thread.start()
+    logging.info(f"Log receiver listening on http://{LOG_HOST}:{LOG_PORT}/log")
     main()
