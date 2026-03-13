@@ -6,10 +6,7 @@ services:
     env_file:
       - .env
     networks:
-      - proxy
       - cs2-network
 networks:
-  proxy:
-    external: true
   cs2-network:
     external: true

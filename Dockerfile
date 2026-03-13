@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-RUN pip install rcon requests fastapi uvicorn[standard]
+RUN pip install rcon
 
 # Copy the script
 COPY autorotate.py .

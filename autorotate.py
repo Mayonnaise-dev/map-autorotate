@@ -4,10 +4,7 @@ import os
 import json
 import random
 import logging
-import threading
 from rcon.source import Client
-from fastapi import FastAPI, Request
-import uvicorn
 
 # Configuration via Environment Variables
 RCON_HOST = os.getenv('RCON_HOST', '192.168.1.50')
@@ -17,30 +14,9 @@ CHECK_INTERVAL = 60  # seconds between timeleft polls
 MANUAL_CHANGE_THRESHOLD = 90  # if timeleft jumps by more than this, treat as manual change
 
 MAPS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'maps.json')
+PLAYER_CHECK_INTERVAL = 60  # seconds between player-count polls when waiting for empty server
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-LOG_HOST = os.getenv('LOG_HOST', '0.0.0.0')
-LOG_PORT = int(os.getenv('LOG_PORT', '3000'))
-
-chat_regex = re.compile(r'^.*".*<\d+><\[.*\]><(CT|TERRORIST)>" say "(.*)"')
-
-api = FastAPI()
-
-
-@api.post('/log')
-async def receive_log(request: Request):
-    body = (await request.body()).decode('utf-8', errors='replace').strip()
-    match = chat_regex.search(body)
-    if match:
-        team = match.group(1)
-        text = match.group(2)
-        logging.info(f"[CHAT] [{team}] {text}")
-    return {}
-
-
-def start_log_server():
-    uvicorn.run(api, host=LOG_HOST, port=LOG_PORT, log_level='warning')
 
 
 def load_t1_maps(maps_file):
@@ -76,6 +52,67 @@ def get_timeleft(client):
     return None
 
 
+def parse_status(status_output):
+    """
+    Parses CS2 'status' command output.
+    Returns a list of dicts: {'userid': '12', 'name': 'Player', 'ip': '1.2.3.4'}
+    Skips bots and connecting players (userid 65535).
+    """
+    players = []
+    lines = status_output.split('\n')
+    in_player_section = False
+
+    for line in lines:
+        if '---------players--------' in line:
+            in_player_section = True
+            continue
+
+        if in_player_section and ('#end' in line or line.strip() == ''):
+            break
+
+        if in_player_section and line.strip():
+            if 'id     time ping loss' in line:
+                continue
+
+            try:
+                if 'BOT' in line:
+                    continue
+
+                if line.strip().startswith('65535'):
+                    continue
+
+                parts = line.split()
+
+                ip_port = None
+                for part in parts:
+                    if ':' in part and '.' in part:
+                        ip_port = part
+                        break
+
+                if ip_port:
+                    ip = ip_port.split(':')[0]
+                    name_match = re.search(r"'(.*?)'", line)
+                    name = name_match.group(1) if name_match else 'Unknown'
+                    players.append({'userid': parts[0], 'name': name, 'ip': ip})
+
+            except Exception as e:
+                logging.warning(f"Failed to parse status line: {line!r} - {e}")
+
+    return players
+
+
+def has_players(client):
+    """Returns True if there are real players on the server, False if empty."""
+    response = client.run('status')
+    players = parse_status(response)
+    count = len(players)
+    if count > 0:
+        logging.info(f"{count} player(s) online — waiting for server to empty.")
+    else:
+        logging.info("Server is empty.")
+    return count > 0
+
+
 def change_map(client, map_name):
     """Issue the changelevel command via RCON."""
     response = client.run(f'ds_workshop_changelevel {map_name}')
@@ -92,28 +129,15 @@ def pick_next_map(t1_maps, last_map):
 
 def do_map_change(t1_maps, last_map):
     """
-    Pre-flight check then issue changelevel.
-    Returns the new map name if changed, or None if aborted (manual change detected).
+    Pick a random T1 map and issue changelevel.
+    Returns the new map name, or None on RCON error.
     """
-    logging.info("Performing pre-flight timeleft check before map change...")
+    next_map = pick_next_map(t1_maps, last_map)
+    logging.info(f"Changing map to: {next_map}")
     try:
         with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-            seconds_left = get_timeleft(client)
-
-        if seconds_left is not None and seconds_left > MANUAL_CHANGE_THRESHOLD:
-            logging.warning(
-                f"Pre-flight: timeleft is {seconds_left}s — manual map change detected. Aborting."
-            )
-            return None
-
-        next_map = pick_next_map(t1_maps, last_map)
-        logging.info(f"Changing map to: {next_map}")
-
-        with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
             change_map(client, next_map)
-
         return next_map
-
     except Exception as e:
         logging.error(f"RCON error during map change: {e}")
         return None
@@ -125,11 +149,49 @@ def main():
     logging.info(f"T1 maps: {t1_maps}")
     logging.info(f"Configuration: RCON_HOST={RCON_HOST}, RCON_PORT={RCON_PORT}")
 
-    expected_end = None  # timestamp (time.time()) when current map should end
-    last_map = None      # last map that was changed to (in-memory only)
+    expected_end = None   # timestamp (time.time()) when current map should end
+    last_map = None       # last map that was changed to (in-memory only)
+    waiting_for_empty = False  # True when the timer has expired and we need the server to empty
 
     while True:
         try:
+            # ----------------------------------------------------------------
+            # WAITING_FOR_EMPTY state
+            # The map timer has expired. Poll every PLAYER_CHECK_INTERVAL until
+            # no real players remain, then issue changelevel.
+            # ----------------------------------------------------------------
+            if waiting_for_empty:
+                with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                    # Guard: if timeleft jumped someone changed the map manually
+                    seconds_left = get_timeleft(client)
+                    if seconds_left is not None and seconds_left > MANUAL_CHANGE_THRESHOLD:
+                        logging.warning(
+                            f"Manual map change detected while waiting for empty server "
+                            f"(timeleft={seconds_left}s). Resuming monitoring."
+                        )
+                        waiting_for_empty = False
+                        expected_end = time.time() + seconds_left
+                        time.sleep(CHECK_INTERVAL)
+                        continue
+
+                    server_empty = not has_players(client)
+
+                if server_empty:
+                    new_map = do_map_change(t1_maps, last_map)
+                    if new_map:
+                        last_map = new_map
+                        logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
+                        time.sleep(60)
+                    waiting_for_empty = False
+                    expected_end = None
+                else:
+                    time.sleep(PLAYER_CHECK_INTERVAL)
+                continue
+
+            # ----------------------------------------------------------------
+            # MONITORING state
+            # Poll timeleft and track when the current map should end.
+            # ----------------------------------------------------------------
             with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
                 seconds_left = get_timeleft(client)
 
@@ -153,40 +215,28 @@ def main():
                     time.sleep(CHECK_INTERVAL)
                     continue
             else:
-                # First iteration — establish the baseline
+                # First iteration or post-change — establish the baseline
                 expected_end = now + seconds_left
 
-            # Time is up — change map immediately
+            # Timer expired — enter waiting-for-empty state
             if seconds_left == 0:
-                logging.info("Timeleft is 0 — triggering map change now.")
-                new_map = do_map_change(t1_maps, last_map)
-                if new_map:
-                    last_map = new_map
-                    expected_end = None  # will be re-established on next poll
-                    logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
-                    time.sleep(60)
-                else:
-                    # Aborted — re-sync timer on next poll
-                    expected_end = None
+                logging.info("Timeleft is 0 — waiting for server to empty before changing map.")
+                waiting_for_empty = True
                 continue
 
-            # Map ends before next regular check — sleep until just after it expires
+            # Map ends before the next regular check — sleep until just after it expires
             if seconds_left <= CHECK_INTERVAL:
                 sleep_for = seconds_left + 5
-                logging.info(f"Map ends in {seconds_left}s — sleeping {sleep_for}s then changing map.")
+                logging.info(
+                    f"Map ends in {seconds_left}s — sleeping {sleep_for}s "
+                    f"then waiting for server to empty."
+                )
                 time.sleep(sleep_for)
-
-                new_map = do_map_change(t1_maps, last_map)
-                if new_map:
-                    last_map = new_map
-                    expected_end = None
-                    logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
-                    time.sleep(60)
-                else:
-                    expected_end = None
+                waiting_for_empty = True
+                expected_end = None
                 continue
 
-            # Plenty of time left — wait for next check
+            # Plenty of time left — wait for next regular check
             time.sleep(CHECK_INTERVAL)
 
         except Exception as e:
@@ -195,7 +245,4 @@ def main():
 
 
 if __name__ == "__main__":
-    log_thread = threading.Thread(target=start_log_server, daemon=True)
-    log_thread.start()
-    logging.info(f"Log receiver listening on http://{LOG_HOST}:{LOG_PORT}/log")
     main()
