@@ -10,11 +10,10 @@ from rcon.source import Client
 RCON_HOST = os.getenv('RCON_HOST', '192.168.1.50')
 RCON_PORT = int(os.getenv('RCON_PORT', '27015'))
 RCON_PASS = os.getenv('RCON_PASS', 'password')
-CHECK_INTERVAL = 60  # seconds between timeleft polls
-MANUAL_CHANGE_THRESHOLD = 90  # if timeleft jumps by more than this, treat as manual change
+POLL_INTERVAL = 300        # seconds between regular player-count polls (5 minutes)
+FINAL_CHECK_INTERVAL = 60  # seconds before the last safety check before changing map
 
 MAPS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'maps.json')
-PLAYER_CHECK_INTERVAL = 60  # seconds between player-count polls when waiting for empty server
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -148,100 +147,78 @@ def main():
     logging.info(f"Map auto-rotate started. T1 pool: {len(t1_maps)} maps")
     logging.info(f"T1 maps: {t1_maps}")
     logging.info(f"Configuration: RCON_HOST={RCON_HOST}, RCON_PORT={RCON_PORT}")
+    logging.info(f"Polling every {POLL_INTERVAL}s for player count.")
 
-    expected_end = None   # timestamp (time.time()) when current map should end
-    last_map = None       # last map that was changed to (in-memory only)
-    waiting_for_empty = False  # True when the timer has expired and we need the server to empty
+    last_map = None
+    consecutive_empty = 0  # number of consecutive 5-minute polls with no players
 
     while True:
         try:
-            # ----------------------------------------------------------------
-            # WAITING_FOR_EMPTY state
-            # The map timer has expired. Poll every PLAYER_CHECK_INTERVAL until
-            # no real players remain, then issue changelevel.
-            # ----------------------------------------------------------------
-            if waiting_for_empty:
-                with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-                    # Guard: if timeleft jumped someone changed the map manually
-                    seconds_left = get_timeleft(client)
-                    if seconds_left is not None and seconds_left > MANUAL_CHANGE_THRESHOLD:
-                        logging.warning(
-                            f"Manual map change detected while waiting for empty server "
-                            f"(timeleft={seconds_left}s). Resuming monitoring."
-                        )
-                        waiting_for_empty = False
-                        expected_end = time.time() + seconds_left
-                        time.sleep(CHECK_INTERVAL)
-                        continue
+            # --- Regular poll: check for players ---
+            with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                players_online = has_players(client)
 
-                    server_empty = not has_players(client)
-
-                if server_empty:
-                    new_map = do_map_change(t1_maps, last_map)
-                    if new_map:
-                        last_map = new_map
-                        logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
-                        time.sleep(60)
-                    waiting_for_empty = False
-                    expected_end = None
-                else:
-                    time.sleep(PLAYER_CHECK_INTERVAL)
+            if players_online:
+                if consecutive_empty > 0:
+                    logging.info("Players detected — resetting empty counter.")
+                consecutive_empty = 0
+                time.sleep(POLL_INTERVAL)
                 continue
 
-            # ----------------------------------------------------------------
-            # MONITORING state
-            # Poll timeleft and track when the current map should end.
-            # ----------------------------------------------------------------
+            # No players this poll
+            consecutive_empty += 1
+            logging.info(f"Server empty (consecutive empty polls: {consecutive_empty}).")
+
+            if consecutive_empty == 1:
+                # First empty poll — wait another 5 minutes before acting
+                logging.info("Will check again in 5 minutes before taking action.")
+                time.sleep(POLL_INTERVAL)
+                continue
+
+            # Second consecutive empty poll — check map time
             with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
                 seconds_left = get_timeleft(client)
 
             if seconds_left is None:
-                logging.warning("Could not get timeleft, retrying in 60s.")
-                time.sleep(CHECK_INTERVAL)
+                logging.warning("Could not read map time — resetting and retrying next poll.")
+                consecutive_empty = 0
+                time.sleep(POLL_INTERVAL)
                 continue
 
-            now = time.time()
-            logging.info(f"Time remaining on current map: {seconds_left // 60}m {seconds_left % 60}s")
-
-            # Detect manual map change: timeleft is significantly higher than expected
-            if expected_end is not None:
-                expected_remaining = expected_end - now
-                if seconds_left - expected_remaining > MANUAL_CHANGE_THRESHOLD:
-                    logging.warning(
-                        f"Manual map change detected — expected ~{int(expected_remaining)}s left, "
-                        f"got {seconds_left}s. Resetting timer."
-                    )
-                    expected_end = now + seconds_left
-                    time.sleep(CHECK_INTERVAL)
-                    continue
-            else:
-                # First iteration or post-change — establish the baseline
-                expected_end = now + seconds_left
-
-            # Timer expired — enter waiting-for-empty state
-            if seconds_left == 0:
-                logging.info("Timeleft is 0 — waiting for server to empty before changing map.")
-                waiting_for_empty = True
-                continue
-
-            # Map ends before the next regular check — sleep until just after it expires
-            if seconds_left <= CHECK_INTERVAL:
-                sleep_for = seconds_left + 5
+            if seconds_left > 0:
                 logging.info(
-                    f"Map ends in {seconds_left}s — sleeping {sleep_for}s "
-                    f"then waiting for server to empty."
+                    f"Server empty but map still has {seconds_left // 60}m {seconds_left % 60}s "
+                    f"remaining — resetting and waiting."
                 )
-                time.sleep(sleep_for)
-                waiting_for_empty = True
-                expected_end = None
+                consecutive_empty = 0
+                time.sleep(POLL_INTERVAL)
                 continue
 
-            # Plenty of time left — wait for next regular check
-            time.sleep(CHECK_INTERVAL)
+            # Map time is 0 — one final safety check 1 minute from now
+            logging.info("Map time is 0 and server is empty — final safety check in 1 minute.")
+            time.sleep(FINAL_CHECK_INTERVAL)
+
+            with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                players_online = has_players(client)
+
+            if players_online:
+                logging.info("Players joined during final check — aborting map change.")
+                consecutive_empty = 0
+                time.sleep(POLL_INTERVAL)
+                continue
+
+            # All clear — change the map
+            new_map = do_map_change(t1_maps, last_map)
+            if new_map:
+                last_map = new_map
+                logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
+                time.sleep(60)
+            consecutive_empty = 0
+            time.sleep(POLL_INTERVAL)
 
         except Exception as e:
             logging.error(f"RCON error: {e}")
-            time.sleep(CHECK_INTERVAL)
+            time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
