@@ -85,6 +85,7 @@ def main():
     last_map = None           # last confirmed active map name
     map_end_time = None       # time.time() when the current map's internal timer expires
     vote_triggered = False    # whether ggmc_mapvote_start was issued this cycle
+    vote_start_time = None    # time.time() when the vote was triggered
     grace_start_time = None   # time.time() when the grace period started (None = not in grace)
     last_announced_mark = -1  # last 5-min mark (in minutes) that was sent via say
     history = []              # in-memory list of maps played this session
@@ -110,6 +111,7 @@ def main():
                 last_map = current_map
                 map_end_time = now + MAP_DURATION * 60
                 vote_triggered = False
+                vote_start_time = None
                 grace_start_time = None
                 last_announced_mark = MAP_DURATION  # skip redundant "N min remaining" at full time
 
@@ -151,6 +153,7 @@ def main():
                     last_map = None
                     map_end_time = None
                     vote_triggered = False
+                    vote_start_time = None
                     grace_start_time = None
                     last_announced_mark = -1
                     logging.info("Waiting 90s for server to load forced map...")
@@ -168,7 +171,17 @@ def main():
                 f"Map: {current_map} | ~{minutes_remaining}m {int(seconds_remaining % 60)}s remaining"
             )
 
-            if seconds_remaining <= 0:
+            # 1 minute after vote was triggered: execute ggmc_change_nextmap, then enter grace period
+            if vote_triggered and vote_start_time is not None and (now - vote_start_time) >= 60 and grace_start_time is None:
+                logging.info("1 minute since vote started — executing ggmc_change_nextmap.")
+                with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                    send_say(client, "Map vote is over! Changing map now...")
+                    client.run('ggmc_change_nextmap')
+                vote_start_time = None
+                grace_start_time = now
+                last_announced_mark = -1
+
+            elif seconds_remaining <= 0:
                 if not vote_triggered:
                     # Edge case: somehow missed the 1-min trigger — fire vote immediately
                     logging.warning("Timer expired without a vote trigger — firing vote now.")
@@ -176,13 +189,10 @@ def main():
                         send_say(client, "Time is up! Starting a map vote now...")
                         trigger_vote(client)
                     vote_triggered = True
-                else:
-                    # Vote was already triggered; move into the grace period
-                    logging.info("Timer expired after vote. Entering grace period.")
-                    grace_start_time = now
-                    last_announced_mark = -1
-                    with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-                        send_say(client, "Vote has concluded — waiting for the map to change...")
+                    vote_start_time = now
+                elif grace_start_time is None:
+                    # Vote fired but ggmc_change_nextmap not yet sent (sub-poll-interval edge case)
+                    logging.info("Timer expired, waiting for 1-min post-vote window.")
 
             elif seconds_remaining <= 60 and not vote_triggered:
                 # 1-minute warning + trigger the vote
@@ -190,6 +200,7 @@ def main():
                     send_say(client, "1 minute left! Starting a map vote now...")
                     trigger_vote(client)
                 vote_triggered = True
+                vote_start_time = now
 
             elif minutes_remaining > 1 and minutes_remaining % 5 == 0 and minutes_remaining != last_announced_mark:
                 # Regular 5-minute countdown announcement
