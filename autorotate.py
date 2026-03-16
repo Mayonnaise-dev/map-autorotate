@@ -88,6 +88,7 @@ def main():
     vote_start_time = None    # time.time() when the vote was triggered
     grace_start_time = None   # time.time() when the grace period started (None = not in grace)
     last_announced_mark = -1  # last 5-min mark (in minutes) that was sent via say
+    nominate_reminder = False  # alternates to append !nominate hint every other announcement
     history = []              # in-memory list of maps played this session
 
     while True:
@@ -204,8 +205,12 @@ def main():
 
             elif minutes_remaining > 1 and minutes_remaining % 5 == 0 and minutes_remaining != last_announced_mark:
                 # Regular 5-minute countdown announcement
+                msg = f"{minutes_remaining} minutes remaining on this map."
+                if nominate_reminder:
+                    msg += " Use !nominate to vote for the next map before time runs out!"
+                nominate_reminder = not nominate_reminder
                 with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-                    send_say(client, f"{minutes_remaining} minutes remaining on this map.")
+                    send_say(client, msg)
                 last_announced_mark = minutes_remaining
 
         except Exception as e:
