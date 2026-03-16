@@ -10,8 +10,9 @@ from rcon.source import Client
 RCON_HOST = os.getenv('RCON_HOST', '192.168.1.50')
 RCON_PORT = int(os.getenv('RCON_PORT', '27015'))
 RCON_PASS = os.getenv('RCON_PASS', 'password')
-CHECK_INTERVAL = 60  # seconds between timeleft polls
-MANUAL_CHANGE_THRESHOLD = 90  # if timeleft jumps by more than this, treat as manual change
+MAP_DURATION = int(os.getenv('MAP_DURATION', '60'))    # minutes each map runs
+GRACE_PERIOD = int(os.getenv('GRACE_PERIOD', '15'))    # extra minutes before a forced changelevel
+POLL_INTERVAL = int(os.getenv('POLL_INTERVAL', '30'))  # seconds between status polls
 
 MAPS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'maps.json')
 
@@ -33,140 +34,173 @@ def load_t1_maps(maps_file):
     return t1_maps
 
 
-def get_timeleft(client):
+def get_current_map(client):
     """
-    Run 'timeleft' via RCON and return remaining seconds, or None if unparseable.
-    Prints the raw response for debugging.
+    Run 'status' via RCON and parse the active map name from the spawngroup line.
+    Returns the map name string (e.g. 'surf_oasis') or None if unparseable.
     """
-    response = client.run('timeleft')
-    print(f"[DEBUG] timeleft raw response: {repr(response)}")
-
-    match = re.search(r'Time Remaining:\s+(\d+):(\d+)', response)
+    response = client.run('status')
+    match = re.search(r'\[1:\s+(surf_\S+?)\s*\|', response)
     if match:
-        minutes = int(match.group(1))
-        seconds = int(match.group(2))
-        return minutes * 60 + seconds
-
-    logging.warning(f"Could not parse timeleft from response: {repr(response)}")
+        return match.group(1)
+    logging.warning(f"Could not parse map name from status: {repr(response[:300])}")
     return None
 
 
-def change_map(client, map_name):
-    """Issue the changelevel command via RCON."""
+def send_say(client, message):
+    """Send a chat message to all players via RCON."""
+    client.run(f'say [Server] {message}')
+    logging.info(f"[say] {message}")
+
+
+def trigger_vote(client):
+    """Kick off a ggmc map vote."""
+    client.run('ggmc_mapvote_start 25')
+    logging.info("Triggered ggmc_mapvote_start 25")
+
+
+def force_changelevel(client, map_name):
+    """Force a map change via RCON."""
     response = client.run(f'ds_workshop_changelevel {map_name}')
-    logging.info(f"changelevel response: {repr(response)}")
+    logging.info(f"force_changelevel to {map_name}: {repr(response)}")
 
 
-def pick_next_map(t1_maps, last_map):
-    """Pick a random T1 map, excluding the last played map."""
-    pool = [m for m in t1_maps if m != last_map]
+def pick_random_t1_map(t1_maps, exclude_map):
+    """Pick a random T1 map, excluding exclude_map."""
+    pool = [m for m in t1_maps if m != exclude_map]
     if not pool:
-        pool = t1_maps  # fallback: only one map in pool
+        pool = t1_maps  # fallback in case the entire pool is just one map
     return random.choice(pool)
-
-
-def do_map_change(t1_maps, last_map):
-    """
-    Pre-flight check then issue changelevel.
-    Returns the new map name if changed, or None if aborted (manual change detected).
-    """
-    logging.info("Performing pre-flight timeleft check before map change...")
-    try:
-        with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-            seconds_left = get_timeleft(client)
-
-        if seconds_left is not None and seconds_left > MANUAL_CHANGE_THRESHOLD:
-            logging.warning(
-                f"Pre-flight: timeleft is {seconds_left}s — manual map change detected. Aborting."
-            )
-            return None
-
-        next_map = pick_next_map(t1_maps, last_map)
-        logging.info(f"Changing map to: {next_map}")
-
-        with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-            change_map(client, next_map)
-
-        return next_map
-
-    except Exception as e:
-        logging.error(f"RCON error during map change: {e}")
-        return None
 
 
 def main():
     t1_maps = load_t1_maps(MAPS_FILE)
     logging.info(f"Map auto-rotate started. T1 pool: {len(t1_maps)} maps")
     logging.info(f"T1 maps: {t1_maps}")
-    logging.info(f"Configuration: RCON_HOST={RCON_HOST}, RCON_PORT={RCON_PORT}")
+    logging.info(
+        f"Config: RCON={RCON_HOST}:{RCON_PORT}, MAP_DURATION={MAP_DURATION}m, "
+        f"GRACE_PERIOD={GRACE_PERIOD}m, POLL_INTERVAL={POLL_INTERVAL}s"
+    )
 
-    expected_end = None  # timestamp (time.time()) when current map should end
-    last_map = None      # last map that was changed to (in-memory only)
+    last_map = None           # last confirmed active map name
+    map_end_time = None       # time.time() when the current map's internal timer expires
+    vote_triggered = False    # whether ggmc_mapvote_start was issued this cycle
+    grace_start_time = None   # time.time() when the grace period started (None = not in grace)
+    last_announced_mark = -1  # last 5-min mark (in minutes) that was sent via say
+    history = []              # in-memory list of maps played this session
 
     while True:
         try:
             with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-                seconds_left = get_timeleft(client)
+                current_map = get_current_map(client)
 
-            if seconds_left is None:
-                logging.warning("Could not get timeleft, retrying in 60s.")
-                time.sleep(CHECK_INTERVAL)
+            if current_map is None:
+                logging.warning("Could not detect current map — retrying in %ds.", POLL_INTERVAL)
+                time.sleep(POLL_INTERVAL)
                 continue
 
             now = time.time()
-            logging.info(f"Time remaining on current map: {seconds_left // 60}m {seconds_left % 60}s")
 
-            # Detect manual map change: timeleft is significantly higher than expected
-            if expected_end is not None:
-                expected_remaining = expected_end - now
-                if seconds_left - expected_remaining > MANUAL_CHANGE_THRESHOLD:
-                    logging.warning(
-                        f"Manual map change detected — expected ~{int(expected_remaining)}s left, "
-                        f"got {seconds_left}s. Resetting timer."
+            # ------------------------------------------------------------------
+            # New map detected (first run or the map changed)
+            # ------------------------------------------------------------------
+            if (last_map is None) or (current_map != last_map):
+                logging.info(f"New map detected: {current_map!r} (previous: {last_map!r})")
+                history.append(current_map)
+                last_map = current_map
+                map_end_time = now + MAP_DURATION * 60
+                vote_triggered = False
+                grace_start_time = None
+                last_announced_mark = MAP_DURATION  # skip redundant "N min remaining" at full time
+
+                with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                    send_say(
+                        client,
+                        f"Welcome to {current_map}! This map will run for {MAP_DURATION} minutes.",
                     )
-                    expected_end = now + seconds_left
-                    time.sleep(CHECK_INTERVAL)
-                    continue
-            else:
-                # First iteration — establish the baseline
-                expected_end = now + seconds_left
 
-            # Time is up — change map immediately
-            if seconds_left == 0:
-                logging.info("Timeleft is 0 — triggering map change now.")
-                new_map = do_map_change(t1_maps, last_map)
-                if new_map:
-                    last_map = new_map
-                    expected_end = None  # will be re-established on next poll
-                    logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
-                    time.sleep(60)
-                else:
-                    # Aborted — re-sync timer on next poll
-                    expected_end = None
+                time.sleep(POLL_INTERVAL)
                 continue
 
-            # Map ends before next regular check — sleep until just after it expires
-            if seconds_left <= CHECK_INTERVAL:
-                sleep_for = seconds_left + 5
-                logging.info(f"Map ends in {seconds_left}s — sleeping {sleep_for}s then changing map.")
-                time.sleep(sleep_for)
+            # ------------------------------------------------------------------
+            # Grace period: timer expired but the map hasn't changed yet
+            # ------------------------------------------------------------------
+            if grace_start_time is not None:
+                grace_elapsed = now - grace_start_time
+                grace_remaining_secs = max(0.0, GRACE_PERIOD * 60 - grace_elapsed)
+                grace_remaining_min = int(grace_remaining_secs / 60)
 
-                new_map = do_map_change(t1_maps, last_map)
-                if new_map:
-                    last_map = new_map
-                    expected_end = None
-                    logging.info(f"Map changed to {new_map}. Waiting 60s for server to load...")
-                    time.sleep(60)
-                else:
-                    expected_end = None
+                # Every-5-min warnings while in grace period
+                grace_mark = (grace_remaining_min // 5) * 5
+                if grace_mark > 0 and grace_mark != last_announced_mark:
+                    with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                        send_say(
+                            client,
+                            f"Map vote completed but the map hasn't changed yet. "
+                            f"Forcing a change in {grace_mark} minute{'s' if grace_mark != 1 else ''}.",
+                        )
+                    last_announced_mark = grace_mark
+
+                if grace_elapsed >= GRACE_PERIOD * 60:
+                    forced_map = pick_random_t1_map(t1_maps, last_map)
+                    logging.info(f"Grace period expired — forcing map change to {forced_map}.")
+                    with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                        send_say(client, f"Forcing map change to {forced_map}! See you there!")
+                        force_changelevel(client, forced_map)
+                    # Reset state and wait for the server to load the new map
+                    last_map = None
+                    map_end_time = None
+                    vote_triggered = False
+                    grace_start_time = None
+                    last_announced_mark = -1
+                    logging.info("Waiting 90s for server to load forced map...")
+                    time.sleep(90)
+
+                time.sleep(POLL_INTERVAL)
                 continue
 
-            # Plenty of time left — wait for next check
-            time.sleep(CHECK_INTERVAL)
+            # ------------------------------------------------------------------
+            # Normal timer: countdown announcements, vote trigger, and expiry
+            # ------------------------------------------------------------------
+            seconds_remaining = map_end_time - now
+            minutes_remaining = int(seconds_remaining / 60)
+            logging.info(
+                f"Map: {current_map} | ~{minutes_remaining}m {int(seconds_remaining % 60)}s remaining"
+            )
+
+            if seconds_remaining <= 0:
+                if not vote_triggered:
+                    # Edge case: somehow missed the 1-min trigger — fire vote immediately
+                    logging.warning("Timer expired without a vote trigger — firing vote now.")
+                    with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                        send_say(client, "Time is up! Starting a map vote now...")
+                        trigger_vote(client)
+                    vote_triggered = True
+                else:
+                    # Vote was already triggered; move into the grace period
+                    logging.info("Timer expired after vote. Entering grace period.")
+                    grace_start_time = now
+                    last_announced_mark = -1
+                    with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                        send_say(client, "Vote has concluded — waiting for the map to change...")
+
+            elif seconds_remaining <= 60 and not vote_triggered:
+                # 1-minute warning + trigger the vote
+                with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                    send_say(client, "1 minute left! Starting a map vote now...")
+                    trigger_vote(client)
+                vote_triggered = True
+
+            elif minutes_remaining > 1 and minutes_remaining % 5 == 0 and minutes_remaining != last_announced_mark:
+                # Regular 5-minute countdown announcement
+                with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
+                    send_say(client, f"{minutes_remaining} minutes remaining on this map.")
+                last_announced_mark = minutes_remaining
 
         except Exception as e:
-            logging.error(f"RCON error: {e}")
-            time.sleep(CHECK_INTERVAL)
+            logging.error(f"Unhandled error in main loop: {e}")
+
+        time.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
