@@ -73,6 +73,48 @@ def pick_random_t1_map(t1_maps, exclude_map):
     return random.choice(pool)
 
 
+def parse_status(status_output):
+    """
+    Parses CS2 'status' command output.
+    Returns a list of connected human player dicts: {'userid': '12', 'name': 'Player', 'ip': '1.2.3.4'}
+    An empty list means no players are connected.
+    """
+    players = []
+    lines = status_output.split('\n')
+    in_player_section = False
+
+    for line in lines:
+        if '---------players--------' in line:
+            in_player_section = True
+            continue
+        if in_player_section and ('#end' in line or line.strip() == ''):
+            break
+        if in_player_section and line.strip():
+            if 'id     time ping loss' in line:
+                continue
+            try:
+                if 'BOT' in line:
+                    continue
+                if line.strip().startswith('65535'):
+                    continue
+                parts = line.split()
+                userid = parts[0]
+                ip_port = None
+                for part in parts:
+                    if ':' in part and '.' in part:
+                        ip_port = part
+                        break
+                if ip_port:
+                    ip = ip_port.split(':')[0]
+                    name_match = re.search(r"'(.*?)'", line)
+                    name = name_match.group(1) if name_match else 'Unknown'
+                    players.append({'userid': userid, 'name': name, 'ip': ip})
+            except Exception as e:
+                logging.warning(f"Failed to parse status line: {line!r} - {e}")
+
+    return players
+
+
 def main():
     t1_maps = load_t1_maps(MAPS_FILE)
     logging.info(f"Map auto-rotate started. T1 pool: {len(t1_maps)} maps")
@@ -184,24 +226,57 @@ def main():
 
             elif seconds_remaining <= 0:
                 if not vote_triggered:
-                    # Edge case: somehow missed the 1-min trigger — fire vote immediately
-                    logging.warning("Timer expired without a vote trigger — firing vote now.")
+                    # Edge case: somehow missed the 1-min trigger
                     with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-                        send_say(client, "Time is up! Starting a map vote now...")
-                        trigger_vote(client)
-                    vote_triggered = True
-                    vote_start_time = now
+                        status_resp = client.run('status')
+                        players = parse_status(status_resp)
+                        if not players:
+                            forced_map = pick_random_t1_map(t1_maps, last_map)
+                            logging.info("Timer expired, no players connected — skipping vote, forcing map change to %s.", forced_map)
+                            send_say(client, f"Server is empty — changing map to {forced_map}!")
+                            force_changelevel(client, forced_map)
+                        else:
+                            logging.warning("Timer expired without a vote trigger — firing vote now.")
+                            send_say(client, "Time is up! Starting a map vote now...")
+                            trigger_vote(client)
+                            vote_triggered = True
+                            vote_start_time = now
+                    if not vote_triggered:
+                        last_map = None
+                        map_end_time = None
+                        vote_triggered = False
+                        vote_start_time = None
+                        grace_start_time = None
+                        last_announced_mark = -1
+                        logging.info("Waiting 90s for server to load forced map...")
+                        time.sleep(90)
                 elif grace_start_time is None:
                     # Vote fired but ggmc_change_nextmap not yet sent (sub-poll-interval edge case)
                     logging.info("Timer expired, waiting for 1-min post-vote window.")
 
             elif seconds_remaining <= 60 and not vote_triggered:
-                # 1-minute warning + trigger the vote
+                # 1-minute warning — skip vote and force-change immediately if server is empty
                 with Client(RCON_HOST, RCON_PORT, passwd=RCON_PASS, timeout=10) as client:
-                    send_say(client, "1 minute left! Starting a map vote now...")
-                    trigger_vote(client)
-                vote_triggered = True
-                vote_start_time = now
+                    status_resp = client.run('status')
+                    players = parse_status(status_resp)
+                    if not players:
+                        forced_map = pick_random_t1_map(t1_maps, last_map)
+                        logging.info("No players connected at timer expiry — skipping vote, forcing map change to %s.", forced_map)
+                        send_say(client, f"Server is empty — changing map to {forced_map}!")
+                        force_changelevel(client, forced_map)
+                        last_map = None
+                        map_end_time = None
+                        vote_triggered = False
+                        vote_start_time = None
+                        grace_start_time = None
+                        last_announced_mark = -1
+                        logging.info("Waiting 90s for server to load forced map...")
+                        time.sleep(90)
+                    else:
+                        send_say(client, "1 minute left! Starting a map vote now...")
+                        trigger_vote(client)
+                        vote_triggered = True
+                        vote_start_time = now
 
             elif minutes_remaining > 1 and minutes_remaining % 5 == 0 and minutes_remaining != last_announced_mark:
                 # Regular 5-minute countdown announcement
